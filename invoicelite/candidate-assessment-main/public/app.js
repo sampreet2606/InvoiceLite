@@ -48,16 +48,21 @@ async function loadInvoices() {
   tbody.innerHTML = '';
   for (const invoice of invoices) {
     const tr = document.createElement('tr');
-    const payButton = invoice.status === 'open'
-      ? `<button class="pay-btn" data-id="${invoice.id}">Mark paid</button>`
-      : '';
+    const actions = [];
+    if (invoice.status === 'open') {
+      actions.push(`<button class="pay-btn" data-id="${invoice.id}">Mark paid</button>`);
+      actions.push(`<button class="void-btn" data-id="${invoice.id}">Void</button>`);
+    }
+    const statusBadge = invoice.status === 'voided'
+      ? `<span class="badge badge-voided" title="${invoice.voidReason || ''}">voided</span>`
+      : `<span class="badge badge-${invoice.status}">${invoice.status}</span>`;
     tr.innerHTML = `
       <td>${invoice.number}</td>
       <td>${clientName(invoice.clientId)}</td>
       <td class="num">${formatMoney(invoice.total)}</td>
-      <td><span class="badge badge-${invoice.status}">${invoice.status}</span></td>
+      <td>${statusBadge}</td>
       <td>${invoice.dueDate || '—'}</td>
-      <td>${payButton}</td>`;
+      <td>${actions.join(' ')}</td>`;
     tbody.appendChild(tr);
   }
 }
@@ -125,13 +130,34 @@ async function init() {
   document.getElementById('cancel-invoice-btn').addEventListener('click', closeInvoiceModal);
   document.getElementById('status-filter').addEventListener('change', loadInvoices);
   document.querySelector('#invoices-table tbody').addEventListener('click', async (event) => {
-    const button = event.target.closest('.pay-btn');
-    if (!button) return;
-    try {
-      await apiFetch(`/api/invoices/${button.dataset.id}/pay`, { method: 'POST' });
-      await Promise.all([loadInvoices(), loadDashboard()]);
-    } catch (err) {
-      alert(err.message);
+    const payButton = event.target.closest('.pay-btn');
+    const voidButton = event.target.closest('.void-btn');
+    if (payButton) {
+      try {
+        await apiFetch(`/api/invoices/${payButton.dataset.id}/pay`, { method: 'POST' });
+        await Promise.all([loadInvoices(), loadDashboard()]);
+      } catch (err) {
+        alert(err.message);
+      }
+      return;
+    }
+    if (voidButton) {
+      const reason = prompt('Reason for voiding this invoice:');
+      if (reason === null) return;
+      if (!reason.trim()) {
+        alert('A reason is required to void an invoice.');
+        return;
+      }
+      try {
+        await apiFetch(`/api/invoices/${voidButton.dataset.id}/void`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        });
+        await Promise.all([loadInvoices(), loadDashboard()]);
+      } catch (err) {
+        alert(err.message);
+      }
     }
   });
 

@@ -53,6 +53,16 @@ export function createApp() {
     }
   });
 
+  app.post('/api/invoices/:id/void', (req, res, next) => {
+    try {
+      const invoice = store.voidInvoice(req.params.id, req.body.reason);
+      dashboardCache = null;
+      res.json(invoice);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.get('/api/dashboard', (req, res) => {
     const now = Date.now();
     if (dashboardCache && now - dashboardCachedAt < DASHBOARD_CACHE_MS) {

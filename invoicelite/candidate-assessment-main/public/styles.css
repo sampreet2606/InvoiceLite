@@ -72,6 +72,7 @@ tr:last-child td { border-bottom: none; }
 }
 .badge-open { background: #fefcbf; color: #744210; }
 .badge-paid { background: #c6f6d5; color: #22543d; }
+.badge-voided { background: #e2e8f0; color: #4a5568; text-decoration: line-through; }
 
 .toolbar { margin-bottom: 1rem; }
 .toolbar label { font-size: 0.85rem; color: #4a5568; }
@@ -86,6 +87,18 @@ tr:last-child td { border-bottom: none; }
   font-size: 0.8rem;
 }
 .pay-btn:hover { background: #edf2f7; }
+
+.void-btn {
+  border: 1px solid #fc8181;
+  background: #fff;
+  color: #c53030;
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-left: 0.4rem;
+}
+.void-btn:hover { background: #fff5f5; }
 
 .hidden { display: none !important; }
 

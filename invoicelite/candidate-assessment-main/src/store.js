@@ -84,6 +84,8 @@ export function createInvoice({ clientId, items, dueDate }) {
     issuedAt: new Date().toISOString(),
     dueDate: dueDate || null,
     paidAt: null,
+    voidedAt: null,
+    voidReason: null,
   };
   data.invoices.push(invoice);
   client.outstandingBalance = round2(client.outstandingBalance + total);
@@ -100,12 +102,41 @@ export function markInvoicePaid(id) {
   if (invoice.status === 'paid') {
     throw Object.assign(new Error('invoice is already paid'), { statusCode: 409 });
   }
+  if (invoice.status === 'voided') {
+    throw Object.assign(new Error('a voided invoice cannot be marked paid'), { statusCode: 409 });
+  }
   invoice.status = 'paid';
   invoice.paidAt = new Date().toISOString();
   const client = data.clients.find((c) => c.id === invoice.clientId);
   if (client) {
     client.outstandingBalance = round2(client.outstandingBalance - invoice.total);
   }
+  flush();
+  return invoice;
+}
+
+export function voidInvoice(id, reason) {
+  const data = load();
+  const invoice = data.invoices.find((i) => i.id === id);
+  if (!invoice) {
+    throw Object.assign(new Error('invoice not found'), { statusCode: 404 });
+  }
+  if (typeof reason !== 'string' || reason.trim().length === 0) {
+    throw Object.assign(new Error('a reason is required to void an invoice'), { statusCode: 400 });
+  }
+  if (invoice.status === 'paid') {
+    throw Object.assign(new Error('a paid invoice cannot be voided'), { statusCode: 409 });
+  }
+  if (invoice.status === 'voided') {
+    throw Object.assign(new Error('invoice is already voided'), { statusCode: 409 });
+  }
+  const client = data.clients.find((c) => c.id === invoice.clientId);
+  if (client) {
+    client.outstandingBalance = round2(client.outstandingBalance - invoice.total);
+  }
+  invoice.status = 'voided';
+  invoice.voidedAt = new Date().toISOString();
+  invoice.voidReason = reason.trim();
   flush();
   return invoice;
 }
