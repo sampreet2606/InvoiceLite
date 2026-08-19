@@ -59,3 +59,45 @@ There was a second, smaller bug too: `POST /api/invoices/:id/pay` in `src/app.js
 - I decided to fix both the balance bug (root cause) and the missing cache invalidation (contributing/secondary issue) rather than just one, since the ticket explicitly asked to verify root cause but a caller could still see up to 30s of staleness from the cache bug alone in other scenarios.
 
 ---
+
+## Ticket 2 — Void an invoice
+
+### Prompt used
+
+> Let's move on to Ticket 2 now that Ticket 1 is done. Before jumping into code, analyze the problem properly — check whether any unit tests already cover this area, and if not, build them first so we know exactly what "correct" behavior looks like. Use those tests to pin down the exact issue, and only then start fixing it.
+
+### My understanding of the ticket
+
+Unlike Ticket 1, this isn't a bug — it's a brand-new feature. Ops needs a way to void an invoice raised by mistake, with these rules:
+- Voiding requires a non-empty reason.
+- A voided invoice must stop counting toward the client's outstanding balance and the dashboard totals.
+- Voided invoices stay visible in the invoice list, clearly marked, with the reason accessible.
+- A paid invoice can't be voided; a voided invoice can't be marked paid.
+
+### Investigation
+
+I searched the codebase for any existing "void" logic or tests — there were none. So "the exact issue" here was simply that the feature didn't exist at all. Following a TDD-style approach, I wrote `test/void.test.js` first, covering every rule in the ticket (reason required, blank reason rejected, balance/dashboard exclusion, visibility in the list, guarding paid↔voided transitions in both directions, voiding twice, unknown invoice). I ran it against the unmodified code first — 9 of 10 failed (mostly 404s, since the route didn't exist), confirming the feature was genuinely missing before I wrote any implementation code.
+
+### What I changed and why
+
+- **`src/store.js`**:
+  - Added `voidInvoice(id, reason)` — validates the reason is a non-empty string, rejects voiding an already-paid or already-voided invoice (409), otherwise decrements `client.outstandingBalance` by the invoice total (mirroring the pattern used in `markInvoicePaid`) and sets `status: 'voided'`, `voidedAt`, `voidReason`.
+  - Added a guard in `markInvoicePaid()` so a voided invoice can't be marked paid (409).
+  - Added `voidedAt: null` / `voidReason: null` defaults in `createInvoice()` for consistency with the existing `paidAt: null` pattern.
+- **`src/app.js`**: added `POST /api/invoices/:id/void` following the same pattern as the existing `/pay` route (try/catch → `next(err)`, clears `dashboardCache` on success).
+- **`public/app.js` / `index.html` / `styles.css`**: invoice rows now show a **Void** button alongside **Mark paid** for open invoices only; voided invoices get a distinct badge (strikethrough style) with the reason shown as a tooltip (`title` attribute); added a "Voided" option to the status filter dropdown so ops can filter down to just voided invoices. Reason capture uses a simple `window.prompt()` — consistent with the existing minimal, no-build-step frontend style (errors are already surfaced via `alert()`), rather than introducing a new modal component for a single text field.
+- No changes to `openInvoices`/`paidInvoices` dashboard counting logic were needed — since those are computed by filtering on `status`, a `voided` invoice naturally falls out of both buckets automatically.
+
+### How I tested it
+
+- Wrote `test/void.test.js` (10 tests) before implementing, confirmed they failed against the unmodified code, then implemented until all 10 passed.
+- Ran the full suite (`npm test`) — 22/22 passing, no regressions in Ticket 1's tests or the original suite.
+- Manually verified in the browser: voided an open invoice, confirmed the badge/reason/tooltip, confirmed the dashboard's total outstanding and open count updated immediately, confirmed the pay/void buttons disappear once an invoice is voided, and confirmed voided invoices remain visible via the "Voided" filter.
+
+### Things I noticed / was uncertain about
+
+- The ticket doesn't say whether an already-voided invoice can be voided again. I treated a second void attempt as a 409 conflict, consistent with how `markInvoicePaid` already guards against double-paying — this felt like the safer, more consistent default.
+- I used a native `prompt()` for capturing the void reason rather than building a new modal, to stay consistent with the app's existing "no build step, minimal UI" philosophy and avoid unnecessary refactoring. With more time/design input, a proper modal (matching the existing "New Invoice" modal) would be a nicer UX, especially for longer reasons.
+
+---
+
