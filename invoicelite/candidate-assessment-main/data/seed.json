@@ -1,0 +1,89 @@
+{
+  "clients": [
+    {
+      "id": "c-meridian",
+      "name": "Meridian Labs",
+      "email": "accounts@meridianlabs.example",
+      "outstandingBalance": 1200
+    },
+    {
+      "id": "c-bluefern",
+      "name": "Bluefern Studio",
+      "email": "billing@bluefern.example",
+      "outstandingBalance": 750.5
+    },
+    {
+      "id": "c-karta",
+      "name": "Karta Logistics",
+      "email": "finance@karta.example",
+      "outstandingBalance": 0
+    }
+  ],
+  "invoices": [
+    {
+      "id": "inv-0001",
+      "number": "INV-0001",
+      "clientId": "c-meridian",
+      "items": [
+        { "description": "API integration work", "quantity": 12, "unitPrice": 100 }
+      ],
+      "total": 1200,
+      "status": "open",
+      "issuedAt": "2026-07-02T09:15:00.000Z",
+      "dueDate": "2026-08-01",
+      "paidAt": null
+    },
+    {
+      "id": "inv-0002",
+      "number": "INV-0002",
+      "clientId": "c-meridian",
+      "items": [
+        { "description": "Discovery workshop", "quantity": 2, "unitPrice": 400 }
+      ],
+      "total": 800,
+      "status": "paid",
+      "issuedAt": "2026-06-10T14:00:00.000Z",
+      "dueDate": "2026-07-10",
+      "paidAt": "2026-07-08T11:20:00.000Z"
+    },
+    {
+      "id": "inv-0003",
+      "number": "INV-0003",
+      "clientId": "c-bluefern",
+      "items": [
+        { "description": "Landing page design", "quantity": 1, "unitPrice": 450.5 }
+      ],
+      "total": 450.5,
+      "status": "open",
+      "issuedAt": "2026-07-15T10:30:00.000Z",
+      "dueDate": "2026-08-15",
+      "paidAt": null
+    },
+    {
+      "id": "inv-0004",
+      "number": "INV-0004",
+      "clientId": "c-bluefern",
+      "items": [
+        { "description": "Brand assets", "quantity": 3, "unitPrice": 100 }
+      ],
+      "total": 300,
+      "status": "open",
+      "issuedAt": "2026-07-20T16:45:00.000Z",
+      "dueDate": "2026-08-20",
+      "paidAt": null
+    },
+    {
+      "id": "inv-0005",
+      "number": "INV-0005",
+      "clientId": "c-karta",
+      "items": [
+        { "description": "Fleet dashboard MVP", "quantity": 24, "unitPrice": 100 }
+      ],
+      "total": 2400,
+      "status": "paid",
+      "issuedAt": "2026-05-05T08:00:00.000Z",
+      "dueDate": "2026-06-05",
+      "paidAt": "2026-06-01T09:00:00.000Z"
+    }
+  ]
+}

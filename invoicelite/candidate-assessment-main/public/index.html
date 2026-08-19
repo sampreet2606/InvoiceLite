@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InvoiceLite</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>InvoiceLite</h1>
+    <nav>
+      <button id="tab-dashboard" class="tab active">Dashboard</button>
+      <button id="tab-invoices" class="tab">Invoices</button>
+    </nav>
+    <button id="new-invoice-btn" class="primary">+ New Invoice</button>
+  </header>
+
+  <main>
+    <section id="dashboard-view">
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">Total outstanding</span>
+          <span class="stat-value" id="stat-outstanding">–</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Open invoices</span>
+          <span class="stat-value" id="stat-open">–</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Paid invoices</span>
+          <span class="stat-value" id="stat-paid">–</span>
+        </div>
+      </div>
+      <h2>Clients</h2>
+      <table id="clients-table">
+        <thead>
+          <tr><th>Client</th><th class="num">Outstanding</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section id="invoices-view" class="hidden">
+      <div class="toolbar">
+        <label>Status
+          <select id="status-filter">
+            <option value="">All</option>
+            <option value="open">Open</option>
+            <option value="paid">Paid</option>
+          </select>
+        </label>
+      </div>
+      <table id="invoices-table">
+        <thead>
+          <tr><th>Number</th><th>Client</th><th class="num">Total</th><th>Status</th><th>Due</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <div id="invoice-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>New Invoice</h2>
+      <form id="invoice-form">
+        <label>Client
+          <select id="form-client" required></select>
+        </label>
+        <label>Description
+          <input id="form-description" type="text" required />
+        </label>
+        <div class="row">
+          <label>Quantity
+            <input id="form-quantity" type="number" min="1" value="1" required />
+          </label>
+          <label>Unit price
+            <input id="form-unit-price" type="number" min="0" step="0.01" required />
+          </label>
+        </div>
+        <label>Due date
+          <input id="form-due-date" type="date" />
+        </label>
+        <div class="actions">
+          <button type="button" id="cancel-invoice-btn">Cancel</button>
+          <button type="submit" class="primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
