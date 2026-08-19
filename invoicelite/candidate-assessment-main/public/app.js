@@ -1,7 +1,10 @@
 let clients = [];
 
 // Wrap fetch so transient network hiccups don't surface as errors in the UI.
+// Only GET requests are safe to auto-retry — retrying a POST/PATCH/DELETE after
+// a client-side timeout risks resubmitting a request the server already received.
 async function apiFetch(path, options = {}, attempt = 0) {
+  const method = (options.method || 'GET').toUpperCase();
   try {
     const res = await fetch(path, { ...options, signal: AbortSignal.timeout(2000) });
     if (!res.ok) {
@@ -10,7 +13,7 @@ async function apiFetch(path, options = {}, attempt = 0) {
     }
     return await res.json();
   } catch (err) {
-    if (attempt < 2 && (err.name === 'TimeoutError' || err.name === 'TypeError')) {
+    if (method === 'GET' && attempt < 2 && (err.name === 'TimeoutError' || err.name === 'TypeError')) {
       return apiFetch(path, options, attempt + 1);
     }
     throw err;
@@ -69,6 +72,8 @@ async function loadInvoices() {
 
 async function handleInvoiceSubmit(event) {
   event.preventDefault();
+  const submitButton = event.target.querySelector('button[type="submit"]');
+  if (submitButton.disabled) return; // already submitting, ignore duplicate clicks
   const payload = {
     clientId: document.getElementById('form-client').value,
     items: [
@@ -80,6 +85,7 @@ async function handleInvoiceSubmit(event) {
     ],
     dueDate: document.getElementById('form-due-date').value || null,
   };
+  submitButton.disabled = true;
   try {
     await apiFetch('/api/invoices', {
       method: 'POST',
@@ -91,6 +97,8 @@ async function handleInvoiceSubmit(event) {
     showTab('invoices');
   } catch (err) {
     alert(err.message);
+  } finally {
+    submitButton.disabled = false;
   }
 }
 
