@@ -58,6 +58,10 @@ There was a second, smaller bug too: `POST /api/invoices/:id/pay` in `src/app.js
 - My first manual UI test happened *before* the code fix was applied, so my local `data/db.json` had already persisted the incorrect state (invoice marked paid, balance never decremented). Since that file is a flat JSON snapshot, the code fix alone couldn't repair already-corrupted data on disk — I had to delete `data/db.json` so it would regenerate cleanly from `data/seed.json` (this only affects local dev data; the automated tests always run against an isolated temp `DATA_DIR` and were never affected).
 - I decided to fix both the balance bug (root cause) and the missing cache invalidation (contributing/secondary issue) rather than just one, since the ticket explicitly asked to verify root cause but a caller could still see up to 30s of staleness from the cache bug alone in other scenarios.
 
+### Anything I'd improve with more time
+
+- Replace the denormalized `client.outstandingBalance` field with a value computed on demand from non-voided/unpaid invoices (or add a startup consistency check). A manually incremented/decremented running total is exactly the kind of field that silently drifts whenever a new code path forgets to update it — this ticket is one instance of that class of bug, and a computed value would remove the possibility entirely. I didn't do this now since it's a bigger change than the ticket calls for and there was no evidence of other drift beyond the reported case.
+
 ---
 
 ## Ticket 2 — Void an invoice
@@ -97,7 +101,59 @@ I searched the codebase for any existing "void" logic or tests — there were no
 ### Things I noticed / was uncertain about
 
 - The ticket doesn't say whether an already-voided invoice can be voided again. I treated a second void attempt as a 409 conflict, consistent with how `markInvoicePaid` already guards against double-paying — this felt like the safer, more consistent default.
-- I used a native `prompt()` for capturing the void reason rather than building a new modal, to stay consistent with the app's existing "no build step, minimal UI" philosophy and avoid unnecessary refactoring. With more time/design input, a proper modal (matching the existing "New Invoice" modal) would be a nicer UX, especially for longer reasons.
+- I used a native `prompt()` for capturing the void reason rather than building a new modal, to stay consistent with the app's existing "no build step, minimal UI" philosophy and avoid unnecessary refactoring.
+
+### Anything I'd improve with more time
+
+- With more time/design input, a proper modal (matching the existing "New Invoice" modal) would be a nicer UX for capturing the void reason than a native `prompt()`, especially for longer reasons.
 
 ---
 
+## Ticket 3 — Investigation: Occasional duplicate invoices
+
+### Prompts used
+
+**Prompt 1:**
+> Let's move on to Ticket 3 now that Ticket 1 and 2 are done. Before jumping into code, analyze the problem properly — check whether any unit tests already cover this area, and if not, build them first so we know exactly what "correct" behavior looks like. Use those tests to pin down the exact issue. Explain the issue to me first; once I say go ahead, then fix it.
+
+**Prompt 2:**
+> Please go ahead and fix it.
+
+### My understanding of the ticket
+
+Support reported that some users end up with 2–3 identical invoices after clicking **Create** once. It's not reproducible on demand, which points toward a timing/race condition rather than a deterministic logic bug — so this ticket needed investigation and judgment, not just a one-line fix.
+
+### Investigation
+
+No tests existed for this scenario, so I wrote `test/duplicate-invoices.test.js` first to pin down concrete, provable mechanisms rather than guessing:
+
+1. **Server has zero duplicate-submission protection.** Sending the identical `POST /api/invoices` payload twice back-to-back succeeds both times and creates two separate invoices with different IDs — deterministic and 100% reproducible. There's no idempotency key, debounce, or "was this just submitted" check anywhere in `store.js`/`app.js`.
+2. **The client's own `apiFetch` retry logic resubmits non-idempotent requests.** I mirrored `apiFetch`'s exact retry algorithm from `public/app.js` in a test, using a mocked `fetch` to deterministically simulate a client-side timeout. Confirmed: when a request appears to time out (`TimeoutError`/`TypeError`), `apiFetch` silently re-fires **the identical POST body** — it doesn't distinguish safe-to-retry `GET`s from unsafe-to-retry `POST`s.
+3. **No submit-guard in the UI.** `handleInvoiceSubmit` never disabled the Create button, so a double-click (or a slow UI thread) could fire a second real POST independent of any network issue.
+
+Putting it together: under real-world conditions (slow network, brief server load, mobile hiccups), a `POST /api/invoices` can exceed the client's hardcoded 2-second timeout even though the server received and is processing it fine. `apiFetch` then assumes failure and resends the same request up to 2 more times, and the server — having no idea these are "the same" logical request — happily creates 2–3 real invoices. This matches every detail in the report: occasional, timing-dependent, and not reproducible on demand.
+
+I checked one more suspect before ruling it out: `openInvoiceModal()` re-adds a `'submit'` listener on the form every time the modal opens, without ever removing the old one. This looked like a plausible "N listeners → N submits" bug, but since `handleInvoiceSubmit` is passed as the same stable function reference each time (not a new closure), the DOM spec dedupes identical `(type, listener, options)` registrations automatically — so this is **not** actually a bug in any real browser, and I left it alone.
+
+### What I changed and why
+
+- **`public/app.js`** — `apiFetch` now only auto-retries `GET` requests; `POST`/`PATCH`/`DELETE` are never silently resubmitted after a client-side timeout. This directly removes the retry-caused-duplicate mechanism while preserving the original resilience intent for read requests.
+- **`public/app.js`** — `handleInvoiceSubmit` now disables the Create button for the duration of the request and ignores re-entrant submits while one is already in flight, closing the double-click window.
+- **Judgment call — deliberately NOT fixed in code:** server-side idempotency keys (client generates a request ID, server persists and rejects duplicates). This would fully close the residual risk (something could still theoretically resend the exact request at the HTTP layer, e.g. a corporate proxy retry), but it's a bigger design change — new client-generated IDs, server-side dedup storage/expiry — than a focused ticket-level fix should include. I documented this as a "would improve with more time" item instead of implementing it now, since the two client-side fixes remove the only realistic way this bug is currently triggered.
+
+### How I tested it
+
+- Wrote `test/duplicate-invoices.test.js` first, with two failing/characterizing tests proving both mechanisms above, before touching any implementation code.
+- After the fix, rewrote the client-retry test into a proper regression test asserting `apiFetch` makes exactly one attempt for a timed-out `POST` (no retry), and added a companion test proving `GET` retry behavior is unchanged/preserved.
+- Kept the server-side "no idempotency guard" test as a documented, intentionally-still-failing-the-ideal-case test — it passes today (2 invoices created) precisely to document the residual risk called out above, not because it's desired behavior.
+- Ran the full suite (`npm test`) after the fix — 25/25 passing, no regressions across all three tickets.
+- Manually verified in the browser: rapid-clicked **Create** several times and confirmed only one invoice is created per logical submission.
+
+### Things I noticed / was uncertain about
+
+- I could not directly unit-test the real `public/app.js` `apiFetch` function (it's a classic, non-module `<script>`, so nothing is `export`ed and Node can't import it in isolation). I mirrored the algorithm verbatim in the test file instead and left a comment noting it must be kept in sync.
+
+### Anything I'd improve with more time
+
+- Convert `public/app.js` to an ES module (`<script type="module">`) so real production code could be imported and tested directly, instead of mirroring the `apiFetch` algorithm in the test file — more robust long-term, but more refactoring than this ticket warranted.
+- Add server-side idempotency protection (see the judgment call above) — the main thing I'd revisit with more time, especially if InvoiceLite is used over unreliable networks in production.
