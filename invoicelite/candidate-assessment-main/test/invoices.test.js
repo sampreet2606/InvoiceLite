@@ -81,4 +81,14 @@ describe('POST /api/invoices/:id/pay', () => {
     const res = await request(app).post('/api/invoices/inv-0002/pay');
     expect(res.status).toBe(409);
   });
+
+  it('decrements the client outstanding balance by the invoice total', async () => {
+    const clientBefore = (await request(app).get('/api/clients')).body.find((c) => c.id === 'c-meridian');
+    const invoice = (await request(app).get('/api/invoices/inv-0001')).body;
+
+    await request(app).post('/api/invoices/inv-0001/pay');
+
+    const clientAfter = (await request(app).get('/api/clients')).body.find((c) => c.id === 'c-meridian');
+    expect(clientAfter.outstandingBalance).toBe(clientBefore.outstandingBalance - invoice.total);
+  });
 });

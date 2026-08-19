@@ -46,6 +46,7 @@ export function createApp() {
   app.post('/api/invoices/:id/pay', (req, res, next) => {
     try {
       const invoice = store.markInvoicePaid(req.params.id);
+      dashboardCache = null;
       res.json(invoice);
     } catch (err) {
       next(err);

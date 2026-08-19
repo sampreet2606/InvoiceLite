@@ -102,6 +102,10 @@ export function markInvoicePaid(id) {
   }
   invoice.status = 'paid';
   invoice.paidAt = new Date().toISOString();
+  const client = data.clients.find((c) => c.id === invoice.clientId);
+  if (client) {
+    client.outstandingBalance = round2(client.outstandingBalance - invoice.total);
+  }
   flush();
   return invoice;
 }

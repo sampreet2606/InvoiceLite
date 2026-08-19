@@ -39,4 +39,17 @@ describe('GET /api/dashboard', () => {
     expect(res.body.totalOutstanding).toBe(2450.5);
     expect(res.body.openInvoices).toBe(4);
   });
+
+  it('reflects a payment immediately, even with the cache primed', async () => {
+    const app = createApp();
+    const before = await request(app).get('/api/dashboard');
+    const meridianBefore = before.body.clients.find((c) => c.id === 'c-meridian');
+    expect(meridianBefore.outstandingBalance).toBe(1200);
+
+    await request(app).post('/api/invoices/inv-0001/pay');
+
+    const after = await request(app).get('/api/dashboard');
+    const meridianAfter = after.body.clients.find((c) => c.id === 'c-meridian');
+    expect(meridianAfter.outstandingBalance).toBe(0);
+  });
 });
