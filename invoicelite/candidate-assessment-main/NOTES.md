@@ -57,10 +57,7 @@ There was a second, smaller bug too: `POST /api/invoices/:id/pay` in `src/app.js
 
 - My first manual UI test happened *before* the code fix was applied, so my local `data/db.json` had already persisted the incorrect state (invoice marked paid, balance never decremented). Since that file is a flat JSON snapshot, the code fix alone couldn't repair already-corrupted data on disk — I had to delete `data/db.json` so it would regenerate cleanly from `data/seed.json` (this only affects local dev data; the automated tests always run against an isolated temp `DATA_DIR` and were never affected).
 - I decided to fix both the balance bug (root cause) and the missing cache invalidation (contributing/secondary issue) rather than just one, since the ticket explicitly asked to verify root cause but a caller could still see up to 30s of staleness from the cache bug alone in other scenarios.
-
-### Anything I'd improve with more time
-
-- Replace the denormalized `client.outstandingBalance` field with a value computed on demand from non-voided/unpaid invoices (or add a startup consistency check). A manually incremented/decremented running total is exactly the kind of field that silently drifts whenever a new code path forgets to update it — this ticket is one instance of that class of bug, and a computed value would remove the possibility entirely. I didn't do this now since it's a bigger change than the ticket calls for and there was no evidence of other drift beyond the reported case.
+- With more time, I'd replace the denormalized `client.outstandingBalance` field with a value computed on demand from non-voided/unpaid invoices (or add a startup consistency check). A manually incremented/decremented running total is exactly the kind of field that silently drifts whenever a new code path forgets to update it — this ticket is one instance of that class of bug, and a computed value would remove the possibility entirely. I didn't do this now since it's a bigger change than the ticket calls for and there was no evidence of other drift beyond the reported case.
 
 ---
 
@@ -101,11 +98,7 @@ I searched the codebase for any existing "void" logic or tests — there were no
 ### Things I noticed / was uncertain about
 
 - The ticket doesn't say whether an already-voided invoice can be voided again. I treated a second void attempt as a 409 conflict, consistent with how `markInvoicePaid` already guards against double-paying — this felt like the safer, more consistent default.
-- I used a native `prompt()` for capturing the void reason rather than building a new modal, to stay consistent with the app's existing "no build step, minimal UI" philosophy and avoid unnecessary refactoring.
-
-### Anything I'd improve with more time
-
-- With more time/design input, a proper modal (matching the existing "New Invoice" modal) would be a nicer UX for capturing the void reason than a native `prompt()`, especially for longer reasons.
+- I used a native `prompt()` for capturing the void reason rather than building a new modal, to stay consistent with the app's existing "no build step, minimal UI" philosophy and avoid unnecessary refactoring. With more time/design input, a proper modal (matching the existing "New Invoice" modal) would be a nicer UX, especially for longer reasons.
 
 ---
 
@@ -151,9 +144,5 @@ I checked one more suspect before ruling it out: `openInvoiceModal()` re-adds a 
 
 ### Things I noticed / was uncertain about
 
-- I could not directly unit-test the real `public/app.js` `apiFetch` function (it's a classic, non-module `<script>`, so nothing is `export`ed and Node can't import it in isolation). I mirrored the algorithm verbatim in the test file instead and left a comment noting it must be kept in sync.
-
-### Anything I'd improve with more time
-
-- Convert `public/app.js` to an ES module (`<script type="module">`) so real production code could be imported and tested directly, instead of mirroring the `apiFetch` algorithm in the test file — more robust long-term, but more refactoring than this ticket warranted.
-- Add server-side idempotency protection (see the judgment call above) — the main thing I'd revisit with more time, especially if InvoiceLite is used over unreliable networks in production.
+- I could not directly unit-test the real `public/app.js` `apiFetch` function (it's a classic, non-module `<script>`, so nothing is `export`ed and Node can't import it in isolation). I mirrored the algorithm verbatim in the test file instead and left a comment noting it must be kept in sync — a more robust long-term setup would convert `public/app.js` to an ES module (`<script type="module">`) so real production code could be imported and tested directly, but that felt like more refactoring than this ticket warranted.
+- I'm intentionally leaving server-side idempotency protection out of scope for now (see above) — flagging this as the main thing I'd revisit with more time, especially if InvoiceLite is used over unreliable networks in production.
